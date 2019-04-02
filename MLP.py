@@ -118,11 +118,13 @@ class neuron:
 
 class network:
     
-    def __init__(self, input_units, hidden_units, output_units):
+    def __init__(self, input_units, hidden_units, output_units, pattern_error, population_error):
         
         self.input = input_units
         self.hidden = hidden_units
         self.output = output_units
+        self.pat_error = pattern_error
+        self.population = population_error
 
 
 
@@ -131,16 +133,17 @@ class network:
 
 
 # Print activation and weights for a given input
-def test_performance(network, test_input, target = "not specified"):
+def test_performance(network, test_input, target = "not specified", verbose = False):
 
     # Setting activation for the input units and saving activations in a variable
     input_activations =  []
     for u in range(np.size(network.input)-1):
         network.input[u].calculate_activation(test_input[u])
         input_activations.append(network.input[u].activation)
-        print("Activation for input unit {} is: {}".format(u, network.input[u].activation))
+        if verbose == True:
+            print("Activation for input unit {} is: {}".format(u, network.input[u].activation))
         
-    print("\n")
+    
     # Adding activation for the bias unit to the list
     input_activations.append(network.input[-1].activation)
     # Saving the activations as an array for easier calculations
@@ -154,11 +157,12 @@ def test_performance(network, test_input, target = "not specified"):
         hidden_activations.append(network.hidden[u].activation)
         
     # Printing activations for the units in the hidden layer (not printing activation for bias, since it's just 1)    
-    for u in range(network.hidden.size - 1):
-        print("Weights coming in to hidden unit {} are {}".format(u, network.hidden[u].weights))        
-        print("Activation for hidden unit {} is {}".format(u, network.hidden[u].activation))
-     
-    print("\n")
+    if verbose == True:    
+        for u in range(network.hidden.size - 1):
+            print("Weights coming in to hidden unit {} are {}".format(u, network.hidden[u].weights))        
+            print("Activation for hidden unit {} is {}".format(u, network.hidden[u].activation))
+         
+        print("\n")
     hidden_activations = np.array(hidden_activations)
              
     
@@ -166,19 +170,72 @@ def test_performance(network, test_input, target = "not specified"):
     output_activations = []
     for u in range(network.output.size):
         network.output[u].calculate_activation(hidden_activations)
-        print("Weights coming in to output unit {} are {}".format(u, network.output[u].weights))
-        print("Activation for output unit {} is {}".format(u, network.output[u].activation))
         output_activations.append(network.output[u].activation)
+        if verbose == True:
+            print("Weights coming in to output unit {} are {}".format(u, network.output[u].weights))
+            print("Activation for output unit {} is {}".format(u, network.output[u].activation))
 
     print("\nWith the input {}, output is {}".format(test_input, output_activations))
     print("Target was {}".format(target))
-
+    
+    # Calculating whether the prediction was correct or not
+       
+    if output_activations[0] > 0.5:
+        output_activations[0] = 1
+    else:
+        output_activations[0] = 0
+    
+    if output_activations[0] == target:
+        correct = True
+    else:
+        correct = False
+        
+    return(correct)
 
 
 
 # --------------------------------------------------------------------------
 
-def train_nn(data, target, params):
+def read_input(input_file):
+    
+    #Reading input file and removing empty entries in the list if any (a \n at the end of document makes an empty entry)
+    with open(input_file, 'r') as f:
+        in_pairs = f.read().split('\n')
+      
+    in_pairs = list(filter(None, in_pairs))
+    
+    # Splitting the pairs into paired groups
+    split_pairs = []
+    for i in range(len(in_pairs)):
+        one_pair = in_pairs[i].split(" ")
+        split_pairs.append(one_pair)
+    
+    # Turning into a numpy array
+    d = np.array(split_pairs)
+    d = d.astype(np.float)
+    return(d)
+    
+def read_teacher(teacher_file):
+        
+    # Same thing for teaching input
+    with open(teacher_file, 'r') as f:
+        target = f.read().split('\n')
+    
+    target = list(filter(None, target))
+    
+    target_pairs = []
+    for i in range(len(target)):
+        one_pair = target[i].split(" ")
+        target_pairs.append(one_pair)
+    
+    t = np.array(target_pairs)
+    t = t.astype(np.float)
+    return(t)
+
+
+# --------------------------------------------------------------------------
+
+def train_nn(data, target, params, max_epochs):
 
     # Reading param file and saving to variables
     with open(params, 'r') as f:
@@ -192,38 +249,10 @@ def train_nn(data, target, params):
     momentum = float(args[4])
     error_criterion = float(args[5])
     
-    # Reading input file and removing empty entries in the list if any (a \n at the end of document makes an empty entry)
-    with open(data, 'r') as f:
-        in_pairs = f.read().split('\n')
-      
-      
+    # Reading input data
+    d = read_input(data)
     
-    in_pairs = list(filter(None, in_pairs))
-    
-    # Splitting the pairs into paired groups
-    split_pairs = []
-    for i in range(len(in_pairs)):
-        one_pair = in_pairs[i].split(" ")
-        split_pairs.append(one_pair)
-    
-    # Turning into a numpy array
-    d = np.array(split_pairs)
-    d = d.astype(np.float)
-    
-        
-    # Same thing for teaching input
-    with open(target, 'r') as f:
-        target = f.read().split('\n')
-    
-    target = list(filter(None, target))
-    
-    target_pairs = []
-    for i in range(len(target)):
-        one_pair = target[i].split(" ")
-        target_pairs.append(one_pair)
-    
-    t = np.array(target_pairs)
-    t = t.astype(np.float)
+    t = read_teacher(target)
     
     # ----------------------------------------------------------------------------------------
     
@@ -269,6 +298,8 @@ def train_nn(data, target, params):
     # Looping for each training input until error is below threshold
     while population_error > error_criterion:
     
+        pat_error = np.zeros(len(d))        
+        
         for p in range(len(d)):
             
             # for online learning, randomizing the order the data is presented in     
@@ -292,8 +323,9 @@ def train_nn(data, target, params):
                 hidden[u].calculate_activation(input_activations)
                 hidden_activations.append(hidden[u].activation)
             
+            #print("Hidden Activations {}".format(hidden_activations))
             hidden_activations = np.array(hidden_activations)
-            
+            #print("Hidden Activations {}".format(hidden_activations))
                      
             
             # Variables to store activation and delta
@@ -309,7 +341,9 @@ def train_nn(data, target, params):
     #            outputs_delta.append(outputs[u].delta)
                 p_squared_error.append(outputs[u].squared_error)
             
+            #print("Output: {}".format(outputs[0].activation))
             p_sum_squared_error = sum(p_squared_error)
+            pat_error[p] = p_sum_squared_error
     
             '''
             FOR ONLINE LEARNING
@@ -329,63 +363,48 @@ def train_nn(data, target, params):
                 #FOR ONLINE LEARNING
                 hidden[u].update_weight(input_activations, eta, momentum)
                 
-        population_error = p_sum_squared_error / (n_output * len(d))
+        #print("Pattern error is {}".format(pat_error))
+
+        population_error = sum(pat_error) / (n_output * len(d))
+        #print("Pop error is {}".format(population_error))
         n_epochs += 1
         if n_epochs % 100 == 0: 
             print("Number of epochs: {}".format(n_epochs))
             print("Pop error is {}".format(population_error))
+            
+        if n_epochs == max_epochs:
+            print('\nMax number of epochs reached.\nNumber of epochs: {}, population error: {}'.format(n_epochs, population_error))
+            output = network(inputs, hidden, outputs, pat_error, population_error)
+            return(output)
+            break
     
     print('\nTraining done.\nNumber of epochs: {}, population error: {}'.format(n_epochs, population_error))
-    output = network(inputs, hidden, outputs)
+    output = network(inputs, hidden, outputs, pat_error, population_error)
     return(output)
             
         
     
     
-
-tester = train_nn('in.txt', 'teach.txt', 'param.txt')
-
-
-with open('in.txt', 'r') as f:
-    in_pairs = f.read().split('\n')
- 
-  
-
-in_pairs = list(filter(None, in_pairs))
-
-# Splitting the pairs into paired groups
-split_pairs = []
-for i in range(len(in_pairs)):
-    one_pair = in_pairs[i].split(" ")
-    split_pairs.append(one_pair)
-
-# Turning into a numpy array
-d = np.array(split_pairs)
-d = d.astype(np.float)
-
-    
-# Same thing for teaching input
-with open('teach.txt', 'r') as f:
-    target = f.read().split('\n')
-
-target = list(filter(None, target))
-
-target_pairs = []
-for i in range(len(target)):
-    one_pair = target[i].split(" ")
-    target_pairs.append(one_pair)
-
-t = np.array(target_pairs)
-t = t.astype(np.float)
+# Training the model
+model = train_nn('in.txt', 'teach.txt', 'param.txt', 10000)
 
 
-test_input = d[0]
-test_output = t[0]    
+# Reading in test input and teacher output
+test_input = read_input('in.txt')
+test_output = read_teacher('teach.txt')  
 
-for i in range(len(d)):
-    test_performance(tester, d[i], t[i])
 
-test_performance(tester, test_input, test_output)
+# Conducting performance test
+correct = []
+for i in range(len(test_input)):
+    correct.append(test_performance(model, test_input[i], test_output[i]))
+
+accuracy = sum(correct) / len(test_input)
+print("Model accuracy is {}".format(accuracy))
+
+test_performance(model, test_input[0], test_output[0], verbose = True)
+
+
 
 
 """
@@ -397,3 +416,4 @@ WHAT TO TEST?
     - DIFFERENT RULES OF THUMB FOR NUMBER OF HIDDEN UNITS
     - DIFFERENT TECHNIQUES FOR SPEEDING UP NETWORKS
 """
+
