@@ -175,27 +175,51 @@ def test_performance(network, test_input, target = "not specified", verbose = Fa
             print("Weights coming in to output unit {} are {}".format(u, network.output[u].weights))
             print("Activation for output unit {} is {}".format(u, network.output[u].activation))
 
-    print("\nWith the input {}, output is {}".format(test_input, output_activations))
-    print("Target was {}".format(target))
-    
-    # Calculating whether the prediction was correct or not
-       
-    if output_activations[0] > 0.5:
-        output_activations[0] = 1
-    else:
-        output_activations[0] = 0
-    
-    if output_activations[0] == target:
-        correct = True
-    else:
-        correct = False
+    if verbose == True:
+        print("\nWith the input {}, output is {}".format(test_input, output_activations))
+        print("Target was {}".format(target))
         
+    # Calculating whether the prediction was correct or not
+    # For only 1 output:
+    
+
+    if len(output_activations) == 1:
+        if output_activations[0] > 0.5:
+            output_activations[0] = 1
+        else:
+            output_activations[0] = 0
+        
+        if output_activations[0] == target:
+            correct = True
+        else:
+            correct = False
+    
+    
+    # For more than 1 output
+    else:    
+        # Making output_activaitons a np array so the argmax function can be used to find the highest value (index)
+        output_activations = np.array(output_activations)
+        # If the highest predicted value is at the same place as the target, mark as correct
+        if np.argmax(output_activations) == np.argmax(target):
+            correct = True
+        else:
+            correct = False
+    
     return(correct)
 
 
 
-# --------------------------------------------------------------------------
+def test_multi(network, data, target):
+    # Using the test_performance method to accuracy on a dataset
+    correct = []
+    for i in range(len(data)):
+        correct.append(test_performance(network, data[i], target[i]))
+    
+    accuracy = (sum(correct) / len(data)) * 100
+    return(accuracy)
 
+
+# --------------------------------------------------------------------------
 def read_input(input_file):
     
     #Reading input file and removing empty entries in the list if any (a \n at the end of document makes an empty entry)
@@ -208,13 +232,16 @@ def read_input(input_file):
     split_pairs = []
     for i in range(len(in_pairs)):
         one_pair = in_pairs[i].split(" ")
+        # Removing empty elements from list
+        one_pair = list(filter(None, one_pair))
         split_pairs.append(one_pair)
     
     # Turning into a numpy array
     d = np.array(split_pairs)
     d = d.astype(np.float)
-    return(d)
+    return(d)    
     
+
 def read_teacher(teacher_file):
         
     # Same thing for teaching input
@@ -235,7 +262,8 @@ def read_teacher(teacher_file):
 
 # --------------------------------------------------------------------------
 
-def train_nn(data, target, params, max_epochs):
+def train_nn(data, target, params, max_epochs, validation_data = None, validation_target = None, 
+             save_to_file = None, given_eta = None, count = None):
 
     # Reading param file and saving to variables
     with open(params, 'r') as f:
@@ -245,14 +273,28 @@ def train_nn(data, target, params, max_epochs):
     n_input = int(args[0])
     n_hidden = int(args[1])
     n_output = int(args[2])
-    eta = float(args[3])
+    if given_eta is None:
+        eta = float(args[3])
+    else:
+        eta = given_eta
     momentum = float(args[4])
     error_criterion = float(args[5])
     
     # Reading input data
-    d = read_input(data)
     
-    t = read_teacher(target)
+    # If string, read the txt file
+    if type(data) == str:
+        d = read_input(data)
+    # If supplied with an array, use the array
+    if type(data) == np.ndarray:
+        d = data
+    
+    if type(target) == str:
+        t = read_teacher(target)
+    if type(target) == np.ndarray:
+        t = target
+       
+    
     
     # ----------------------------------------------------------------------------------------
     
@@ -298,6 +340,7 @@ def train_nn(data, target, params, max_epochs):
     # Looping for each training input until error is below threshold
     while population_error > error_criterion:
     
+        # Setting up variable to store pattern errors 
         pat_error = np.zeros(len(d))        
         
         for p in range(len(d)):
@@ -323,25 +366,17 @@ def train_nn(data, target, params, max_epochs):
                 hidden[u].calculate_activation(input_activations)
                 hidden_activations.append(hidden[u].activation)
             
-            #print("Hidden Activations {}".format(hidden_activations))
             hidden_activations = np.array(hidden_activations)
-            #print("Hidden Activations {}".format(hidden_activations))
                      
             
-            # Variables to store activation and delta
-    #        outputs_activation = []
-    #        outputs_delta = []
             p_squared_error = []
             # For all neurons in output layer, calculate activation, and calculate delta.
             for u in range(outputs.size):
                 outputs[u].calculate_activation(hidden_activations)
                 outputs[u].calculate_delta(t[index[p],u])
                 
-    #            outputs_activation.append(outputs[u].activation)
-    #            outputs_delta.append(outputs[u].delta)
                 p_squared_error.append(outputs[u].squared_error)
             
-            #print("Output: {}".format(outputs[0].activation))
             p_sum_squared_error = sum(p_squared_error)
             pat_error[p] = p_sum_squared_error
     
@@ -363,15 +398,33 @@ def train_nn(data, target, params, max_epochs):
                 #FOR ONLINE LEARNING
                 hidden[u].update_weight(input_activations, eta, momentum)
                 
-        #print("Pattern error is {}".format(pat_error))
-
+      
+        # Calculate population error
         population_error = sum(pat_error) / (n_output * len(d))
-        #print("Pop error is {}".format(population_error))
+
         n_epochs += 1
-        if n_epochs % 100 == 0: 
-            print("Number of epochs: {}".format(n_epochs))
-            print("Pop error is {}".format(population_error))
+        if n_epochs % 50 == 0: 
+            #print("Number of epochs: {}".format(n_epochs))
+            #print("Pop error is {}".format(population_error))
             
+            # Calculating test/train accuracy (if testing set is given)
+            if validation_data is None:
+                pass
+            else:
+                model = network(inputs, hidden, outputs, pat_error, population_error)
+                train_acc = test_multi(model, data, target)
+                test_acc = test_multi(model, validation_data, validation_target)
+                #print("Training accuracy is {} and test accuracy is {}".format(train_acc, test_acc))
+                
+                #Saving to file
+                if save_to_file is None:
+                    pass
+                else:
+                    output = "{},{},{},{},{},{}\n".format(n_epochs, train_acc, test_acc, population_error, eta, count)
+                    with open(save_to_file, 'a') as f:
+                        f.write(output)
+        
+        # Stopping if maximum number of epochs is reached
         if n_epochs == max_epochs:
             print('\nMax number of epochs reached.\nNumber of epochs: {}, population error: {}'.format(n_epochs, population_error))
             output = network(inputs, hidden, outputs, pat_error, population_error)
@@ -381,37 +434,88 @@ def train_nn(data, target, params, max_epochs):
     print('\nTraining done.\nNumber of epochs: {}, population error: {}'.format(n_epochs, population_error))
     output = network(inputs, hidden, outputs, pat_error, population_error)
     return(output)
-            
-        
+
+# -------------------------------------------------------------------        
     
-    
+# INITIAL TESTS    
+
 # Training the model
-model = train_nn('in.txt', 'teach.txt', 'param.txt', 10000)
+model221 = train_nn('in.txt', 'teach.txt', 'param221.txt', 10000)
+model331 = train_nn('331.txt', '331t.txt', 'param331.txt', 30000)
+model838 = train_nn('838.txt', '838t.txt', 'param838.txt', 30000)
 
 
-# Reading in test input and teacher output
-test_input = read_input('in.txt')
-test_output = read_teacher('teach.txt')  
+# Reading in test     
+
+test_input = read_input('331.txt')
+test_output = read_teacher('331t.txt')  
 
 
 # Conducting performance test
 correct = []
 for i in range(len(test_input)):
-    correct.append(test_performance(model, test_input[i], test_output[i]))
+    correct.append(test_performance(model331, test_input[i], test_output[i]))
 
-accuracy = sum(correct) / len(test_input)
-print("Model accuracy is {}".format(accuracy))
+accuracy = (sum(correct) / len(test_input)) * 100
+print("Model accuracy is {}% of {} inputs".format(accuracy, len(test_input)))
 
-test_performance(model, test_input[0], test_output[0], verbose = True)
+test_performance(model331, test_input[0], test_output[0], verbose = True)
+
+test_multi(model331, test_input, test_output)
 
 
 
+# -------------------------------------------------------------------
+
+# Testing iris dataset performance with different values of eta as well as adaptive strategies
+
+data = read_input('iris4n3.txt')
+target = read_teacher('iris4n3t.txt')
+
+# Splitting into training and test set (80/20)
+index = np.random.rand(len(data)) < 0.8
+
+train_data = data[index]
+train_target= target[index]
+
+test_data = data[~index]
+test_target = target[~index]
+
+# First testing constant eta values from 0.05 to 0.95 with .10 intervals
+eta_range = np.array([0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.15])
+
+
+# Creating file to store performance measures
+header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Count\n"
+filename = "eta_performance.csv"
+
+with open(filename, 'w+') as f:
+        f.write(header)
+
+# Running the models
+for i in range(len(eta_range)):
+    # 10 iterations with each eta value
+    for n in range(10):
+        model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, filename, eta_range[i], n)
+        print("Eta {} finished iteration {}".format(eta_range[i], n))
+
+
+#test_multi(model, test_input, test_output)
+
+#test_performance(model, test_input[101], test_output[101], verbose = True)
 
 """
 WHAT TO TEST?
+
+    - DIFFERENT VALUES OF LEARNING RATE; INFLUENCE ON FINAL ERROR AND TIME OF LEARNING
+        - ADAPTIVE LEARNING RATE (https://towardsdatascience.com/learning-rate-schedules-and-adaptive-learning-rate-methods-for-deep-learning-2c8f433990d1)
+    
+        - LINEAR DECAY OF LEARNING RATE UNTIL FIXED POINT
+        - EXPONENTIAL DECAY
+        - DECREASE BY FACTOR 2-10 AT EACH PLATEAU
+    
     - DIFFERENT MOMENTUM VALUES
     - DIFFERENT VALUES FOR INITIALIZING WEIGHTS (UNIFORM, GAUSSIAN..)
-    - DIFFERENT LEARNING CONSTANTS
     - DIFFERENT ACTIVATION FUNCTIONS? (RELU? https://jamesmccaffrey.wordpress.com/2017/06/23/two-ways-to-deal-with-the-derivative-of-the-relu-function/)
     - DIFFERENT RULES OF THUMB FOR NUMBER OF HIDDEN UNITS
     - DIFFERENT TECHNIQUES FOR SPEEDING UP NETWORKS
