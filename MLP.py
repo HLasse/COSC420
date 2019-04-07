@@ -13,26 +13,33 @@ import math
 # Making a class neuron which holds all the information for each neuron
 class neuron:
     
-    def __init__(self, neuron_type):
+    def __init__(self, neuron_type, activation_fun = 'sigmoid'):
         
         self.neuron_type = neuron_type
-#        if neuron_type == 'input':
-#            self.activation_function = 'identity'
-#        if neuron_type =='hidden' or neuron_type == 'output':
-#            self.activation_function == 'sigmoid'
+        if neuron_type == 'input':
+            self.activation_function = 'identity'
+            
+        if neuron_type == 'hidden' or neuron_type == 'output':
+            #Setting activation function (either sigmoid or relu)
+            self.activation_function = activation_fun
         if self.neuron_type == 'bias':
             self.activation = 1.0
+            self.activation_function = activation_fun
+        print(self.activation_function)
         
     
     # Function to initialize the weights coming in to the neuron
-    def initialize_weights(self, n_input_neurons):
+    def initialize_weights(self, n_input_neurons, w_distribution = 'uniform', w_range = 0.3):
         
-        # Initialzing weights to be between -0.3 and 0.3
-        weights = np.random.uniform(low=-0.3, high=0.3, size= n_input_neurons)
-        # Checks if any weights are exactly 0, changes them to 0.1 (very arbitrarily) if they are
-        for i in range(np.size(weights)):
-            if weights[i] == 0:
-                weights[i] = 0.1
+        
+        # Initializing weights with uniform distribution between -0.3 and 0.3 (or user specified)
+        if w_distribution == 'uniform':             
+            weights = np.random.uniform(low=-w_range, high=w_range, size= n_input_neurons)
+        
+        # Initializing weights with normal distribution mean 0, sd 1
+        if w_distribution == 'gaussian':
+            weights = np.random.normal(0, w_range, n_input_neurons)
+
         
         self.weights = weights
         
@@ -48,10 +55,17 @@ class neuron:
         # If input neuron, activation is just equal to the input
         if self.neuron_type == 'input':
             self.activation = inputs
-        # Using sigmoid activation function for hidden and output layers
+        # Using specified activation function for hidden and output layers
         if self.neuron_type == 'hidden' or self.neuron_type == 'output':
             net_input = sum(inputs * self.weights)
-            activation = 1 / (1 + math.exp(-net_input))
+            
+            # If sigmoid activation using sigmoid function
+            if self.activation_function == 'sigmoid':
+                activation = 1 / (1 + math.exp(-net_input))
+                
+            # If ReLU activation function
+            elif self.activation_function == 'relu':
+                activation = max(0, net_input)
             
             self.net_input = net_input
             self.activation = activation
@@ -66,13 +80,21 @@ class neuron:
     def calculate_delta(self, target, unit_n = None):
         
         # First calculating the derivative of the activation function
-        # Easy to add possibility to change to different activation functions
-        activation_derivative = self.activation*(1-self.activation)
+        # For sigmoid derivative
+        if self.activation_function == 'sigmoid':
+            self.activation_derivative = self.activation*(1-self.activation)
+        # For ReLU, derivative is 1 if activation is greater than 0, otherwise it's 0
+        if self.activation_function == 'relu':
+            if self.activation > 0:
+                self.activation_derivative = 1
+            else:
+                self.activation_derivative = 0
+                     
         
         # Formula for output neurons
         if self.neuron_type == 'output':
-
-            self.delta = (target - self.activation)* activation_derivative
+            #print("output {}".format(self.activation_derivative))
+            self.delta = (target - self.activation) * self.activation_derivative
         
             # Calculating delta * weights for use in hidden layer
             self.delta_times_weight = self.delta * self.weights
@@ -82,8 +104,8 @@ class neuron:
             
             
         if self.neuron_type == 'hidden' or self.neuron_type == 'bias':
-            
-            # Calculating the sum of the errors for the output units
+            #print("hidden {}".format(self.activation_derivative))
+            # Calculating the sum of the errors for the hidden units
             next_layer_delta_times_weight = []
             for d in range(np.size(target)):
                 error_times_weight = target[d].delta_times_weight[unit_n] * target[d].weights[unit_n]
@@ -92,7 +114,7 @@ class neuron:
             sum_delta_times_weight = sum(next_layer_delta_times_weight)
             
             # Calculating delta
-            self.delta = activation_derivative * sum_delta_times_weight
+            self.delta = self.activation_derivative * sum_delta_times_weight
             
             
     
@@ -263,7 +285,26 @@ def read_teacher(teacher_file):
 # --------------------------------------------------------------------------
 
 def train_nn(data, target, params, max_epochs, validation_data = None, validation_target = None, 
-             save_to_file = None, given_eta = None, count = None):
+             save_to_file = None, given_eta = None, count = None,
+             w_distribution = 'uniform', w_range = 0.3, activation_func = 'sigmoid'):
+
+    """
+    Trains the neural network
+        - Data = training data. Can be string linking to .txt file or numpy array
+        - Target = training target. Can be string linking to .txt file or numpy array
+        - Params = .txt file specifying number of input, hidden, and output units as well as constants for
+                    momemtun, eta, and population error
+        - Max_epochs = the maximum number of epochs the network will train for if it doesn't reach goal population error
+        - Validation_data = test data, numpy array
+        - Validation_target = test target, numpy array
+        - save_to_file = default is don't save, can specify a file to write results to:
+                                        (Train/test accuracy, n epochs, population error)
+        - given_eta = by default uses eta specified in params, but can specify other (used to test different values)
+        - count = used to count iteration number (used to test different values of eta and keep track of iterations)
+        - w_distribution = can be 'uniform' or 'gaussian'. Gaussian is mean 0, sd 1.
+        - w_range = if w_distribution == 'uniform' can specifiy the range to draw values from (default -0.3-0.3)
+    """
+
 
     # Reading param file and saving to variables
     with open(params, 'r') as f:
@@ -318,7 +359,7 @@ def train_nn(data, target, params, max_epochs, validation_data = None, validatio
     
     # Initializing weights for the hidden layer
     for u in range(hidden.size):
-        hidden[u].initialize_weights(inputs.size)
+        hidden[u].initialize_weights(inputs.size, w_distribution, w_range)
     
     
     
@@ -330,7 +371,7 @@ def train_nn(data, target, params, max_epochs, validation_data = None, validatio
     
     # Initializing weights for links to the output layer
     for u in range(outputs.size):
-        outputs[u].initialize_weights(hidden.size)
+        outputs[u].initialize_weights(hidden.size, w_distribution, w_range)
     
     
     # Initializing population error with an arbitrarily high value
@@ -420,7 +461,8 @@ def train_nn(data, target, params, max_epochs, validation_data = None, validatio
                 if save_to_file is None:
                     pass
                 else:
-                    output = "{},{},{},{},{},{}\n".format(n_epochs, train_acc, test_acc, population_error, eta, count)
+                    output = "{},{},{},{},{},{},{},{}\n".format(n_epochs, train_acc, test_acc, population_error, 
+                                                            eta, w_distribution, w_range, count)
                     with open(save_to_file, 'a') as f:
                         f.write(output)
         
@@ -467,7 +509,7 @@ test_multi(model331, test_input, test_output)
 
 # -------------------------------------------------------------------
 
-# Testing iris dataset performance with different values of eta as well as adaptive strategies
+# Testing iris dataset performance with different values of eta 
 
 data = read_input('iris4n3.txt')
 target = read_teacher('iris4n3t.txt')
@@ -500,22 +542,62 @@ for i in range(len(eta_range)):
         print("Eta {} finished iteration {}".format(eta_range[i], n))
 
 
-#test_multi(model, test_input, test_output)
+# -------------------------------------------------------------------
 
-#test_performance(model, test_input[101], test_output[101], verbose = True)
+# Testing different ways of initializing weights
+
+# Still using iris data
+
+header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Distribution,Range,Count\n"
+filename = "gaussian_performance.csv"
+
+w_range = np.array([0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+
+with open(filename, 'w+') as f:
+        f.write(header)
+
+# Running the models with gaussian weight distribution
+# 10 iterations with gaussian initial weights
+for i in range(len(w_range)):
+    for n in range(10):
+        model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
+                         filename, given_eta = 0.005, count = n, w_distribution = 'gaussian', w_range = w_range[i])
+        print("Finished iteration {}".format(n))
+
+
+# Running the model with uniform weight distribution, testing different ranges
+
+header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Distribution,Range,Count\n"
+filename = "uniform_performance.csv"
+
+
+with open(filename, 'w+') as f:
+        f.write(header)
+
+# Running the models with gaussian weight distribution
+# 10 iterations with gaussian initial weights
+for i in range(len(w_range)):
+    for n in range(10):
+        model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
+                         filename, given_eta = 0.005, count = n, w_distribution = 'uniform', w_range = w_range[i])
+        print("Finished iteration {}".format(n))
+
+
+
+
 
 """
 WHAT TO TEST?
 
-    - DIFFERENT VALUES OF LEARNING RATE; INFLUENCE ON FINAL ERROR AND TIME OF LEARNING
-        - ADAPTIVE LEARNING RATE (https://towardsdatascience.com/learning-rate-schedules-and-adaptive-learning-rate-methods-for-deep-learning-2c8f433990d1)
+    - DIFFERENT VALUES OF LEARNING RATE; INFLUENCE ON FINAL ERROR AND TIME OF LEARNING - CHECK
+        # adaptive learning rate? (https://towardsdatascience.com/learning-rate-schedules-and-adaptive-learning-rate-methods-for-deep-learning-2c8f433990d1)
     
-        - LINEAR DECAY OF LEARNING RATE UNTIL FIXED POINT
-        - EXPONENTIAL DECAY
-        - DECREASE BY FACTOR 2-10 AT EACH PLATEAU
-    
+     
     - DIFFERENT MOMENTUM VALUES
     - DIFFERENT VALUES FOR INITIALIZING WEIGHTS (UNIFORM, GAUSSIAN..)
+    
+    
+    
     - DIFFERENT ACTIVATION FUNCTIONS? (RELU? https://jamesmccaffrey.wordpress.com/2017/06/23/two-ways-to-deal-with-the-derivative-of-the-relu-function/)
     - DIFFERENT RULES OF THUMB FOR NUMBER OF HIDDEN UNITS
     - DIFFERENT TECHNIQUES FOR SPEEDING UP NETWORKS
