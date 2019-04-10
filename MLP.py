@@ -25,8 +25,7 @@ class neuron:
         if self.neuron_type == 'bias':
             self.activation = 1.0
             self.activation_function = activation_fun
-        print(self.activation_function)
-        
+         
     
     # Function to initialize the weights coming in to the neuron
     def initialize_weights(self, n_input_neurons, w_distribution = 'uniform', w_range = 0.3):
@@ -531,13 +530,13 @@ eta_range = np.array([0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05
 header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Count\n"
 filename = "eta_performance.csv"
 
-with open(filename, 'w+') as f:
-        f.write(header)
+#with open(filename, 'w+') as f:
+#        f.write(header)
 
 # Running the models
 for i in range(len(eta_range)):
     # 10 iterations with each eta value
-    for n in range(10):
+    for n in range(20, 30):
         model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, filename, eta_range[i], n)
         print("Eta {} finished iteration {}".format(eta_range[i], n))
 
@@ -553,13 +552,13 @@ filename = "gaussian_performance.csv"
 
 w_range = np.array([0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
 
-with open(filename, 'w+') as f:
-        f.write(header)
+#with open(filename, 'w+') as f:
+#        f.write(header)
 
 # Running the models with gaussian weight distribution
 # 10 iterations with gaussian initial weights
 for i in range(len(w_range)):
-    for n in range(10):
+    for n in range(10, 20):
         model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
                          filename, given_eta = 0.005, count = n, w_distribution = 'gaussian', w_range = w_range[i])
         print("Finished iteration {}".format(n))
@@ -571,16 +570,60 @@ header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Distribution,Range,Count\n"
 filename = "uniform_performance.csv"
 
 
-with open(filename, 'w+') as f:
-        f.write(header)
+#with open(filename, 'w+') as f:
+#        f.write(header)
 
 # Running the models with gaussian weight distribution
 # 10 iterations with gaussian initial weights
 for i in range(len(w_range)):
-    for n in range(10):
+    for n in range(10, 20):
         model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
                          filename, given_eta = 0.005, count = n, w_distribution = 'uniform', w_range = w_range[i])
         print("Finished iteration {}".format(n))
+        
+        
+# ------------------------------------------------------------
+
+
+header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Distribution,Range,Count\n"
+filename = "relu_uniform_performance.csv"
+
+
+#with open(filename, 'w+') as f:
+#        f.write(header)
+
+# Running the models with uniform weight distribution and ReLU activation
+# 10 iterations with uniform initial weights
+for i in range(len(w_range)):
+    for n in range(10, 20):
+        model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
+                         filename, given_eta = 0.005, count = n, 
+                         w_distribution = 'uniform', w_range = w_range[i], activation_func = 'relu')
+        print("Finished iteration {}".format(n))
+
+
+
+
+header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Distribution,Range,Count\n"
+filename = "relu_gaussian_performance.csv"
+
+#yugygyugyg
+
+#with open(filename, 'w+') as f:
+#        f.write(header)
+
+
+
+
+# Running the models with uniform weight distribution and ReLU activation
+# 10 iterations with gaussian initial weights
+for i in range(len(w_range)):
+    for n in range(10, 20):
+        model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
+                         filename, given_eta = 0.005, count = n, 
+                         w_distribution = 'gaussian', w_range = w_range[i], activation_func = 'relu')
+        print("Finished iteration {} w {}".format(n, i))
+
 
 
 
@@ -590,16 +633,7 @@ for i in range(len(w_range)):
 WHAT TO TEST?
 
     - DIFFERENT VALUES OF LEARNING RATE; INFLUENCE ON FINAL ERROR AND TIME OF LEARNING - CHECK
-        # adaptive learning rate? (https://towardsdatascience.com/learning-rate-schedules-and-adaptive-learning-rate-methods-for-deep-learning-2c8f433990d1)
-    
-     
-    - DIFFERENT MOMENTUM VALUES
-    - DIFFERENT VALUES FOR INITIALIZING WEIGHTS (UNIFORM, GAUSSIAN..)
-    
-    
-    
-    - DIFFERENT ACTIVATION FUNCTIONS? (RELU? https://jamesmccaffrey.wordpress.com/2017/06/23/two-ways-to-deal-with-the-derivative-of-the-relu-function/)
-    - DIFFERENT RULES OF THUMB FOR NUMBER OF HIDDEN UNITS
-    - DIFFERENT TECHNIQUES FOR SPEEDING UP NETWORKS
-"""
+    - DIFFERENT VALUES FOR INITIALIZING WEIGHTS (UNIFORM, GAUSSIAN..) - CHECK    
+    - DIFFERENT ACTIVATION FUNCTIONS? 
+ """
 
