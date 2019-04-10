@@ -1,0 +1,156 @@
+---
+title: "MLP"
+author: "Lasse Hansen"
+date: "April 4, 2019"
+output: html_document
+---
+
+```{r}
+setwd("~/Desktop/Neural Networks/Assignment")
+
+p_load(tidyverse, ggrepel)
+
+df <- read.csv("eta_performance.csv")
+df2 <- read.csv("Data/eta_performance10.csv")
+
+delete <- c('Range', 'Distribution')
+df[delete] <- NULL
+
+df <- rbind(df, df2)
+
+df$Eta <- as.factor(df$Eta)
+df$Count <- df$Count + 1
+df$Count <- as.factor(df$Count)
+
+nIter <- length(unique(df$Count))
+
+df <- df %>% 
+  group_by(Eta, Epoch) %>% 
+  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), TestAccSE = (sd(TestAcc))/sqrt(nIter)) %>% 
+  mutate(lower = TestAccMean - TestAccSE, upper = TestAccMean + TestAccSE)
+
+# Change across iterations  
+ggplot(df, aes(Epoch, TestAcc, color = Count)) + 
+  geom_line(alpha = 0.7) +
+  facet_wrap(~Eta) +
+  labs(y = "Test Accuracy", title = "Accuracy over 10000 epochs", color = 'Iteration')
+  
+# Change across eta values (mean)
+ggplot(df, aes(Epoch, TestAcc, color = Eta)) + 
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  geom_ribbon(aes(ymin= lower, ymax = upper), alpha = 0.2, color = NA) +
+  facet_wrap(~Eta) +
+  theme(legend.position = 'none') +
+  labs(y = "Test Accuracy", title = "Accuracy over 10000 epochs")
+
+
+ggplot(subset(df, df$Eta == '0.01'), aes(Epoch, TestAcc, color = Eta, fill = Eta)) + 
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  geom_ribbon(aes(ymin= lower, ymax = upper), alpha = 0.2, color = NA) 
+
+
+  
+
+ggplot(df, aes(Epoch, TrainAcc, color = Eta)) + 
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  facet_wrap(~Eta) +
+  theme(legend.position = 'none') +
+  labs(y = "Test Accuracy", title = "Accuracy over 10000 epochs")
+
+
+# Mean change, train and test
+ggplot(df, aes(Epoch, TestAcc, color = Eta)) + 
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  stat_summary(aes(y = TrainAcc), fun.y = 'mean', geom = 'line', linetype = 'dashed', alpha = 0.7) +
+  facet_wrap(~Eta) +
+  theme(legend.position = 'none') +
+  labs(y = "Accuracy", title = "Accuracy over 10000 epochs")
+
+
+
+  
+```
+
+
+```{r}
+uni <- read.csv("uniform_performance.csv")
+gauss <- read.csv("gaussian_performance.csv")
+
+df <- rbind(uni, gauss)
+df$Count <- as.factor(df$Count)
+
+
+df <- df %>% 
+  group_by(Distribution, Range, Epoch) %>% 
+  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), 
+         TestAccSE = (sd(TestAcc))/sqrt(length(unique(Count))),
+         MeanPopErr = mean(PopErr)) %>% 
+  mutate(lower = TestAccMean - TestAccSE, upper = TestAccMean + TestAccSE)
+
+
+
+gauss <- gauss %>% 
+  group_by(Distribution, Epoch) %>% 
+  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), TestAccSE = (sd(TestAcc))/sqrt(length(unique(Count)))) %>% 
+  mutate(lower = TestAccMean - TestAccSE, upper = TestAccMean + TestAccSE)
+
+anno <- gauss %>% 
+  filter(Epoch == 10000) %>% 
+  summarize(TestAcc = mean(TestAcc))
+anno$Epoch <- 10000
+anno$Distribution <- 'gaussian'
+anno$TestAcc <- round(anno$TestAcc, 1)
+
+
+# Mean performance of gaussian
+ggplot(gauss, aes(Epoch, TestAcc, color = Distribution)) +
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  geom_text(data = anno, aes(label = TestAcc), vjust = 2.3) +
+  geom_ribbon(aes(ymin= lower, ymax = upper), alpha = 0.2, color = NA)+
+  theme(legend.position = 'none')
+
+
+# Mean uniform performance across different initial weights
+anno <- df %>% 
+  filter(Epoch == 10000) %>% 
+  group_by(Distribution, Range) %>% 
+  summarize(TestAcc = mean(TestAcc))
+anno$Epoch <- 10000
+anno$TestAcc <- round(anno$TestAcc, 1)
+
+error_threshold <- function(df) {
+  df[which(df$MeanPopErr < 0.02),'Epoch'][1,]
+}
+
+error_threshold(df)
+
+
+# Finding the first time mean population error below the threshold
+test <- df %>% 
+  group_by(Distribution, Range) %>% 
+  arrange(Range, Epoch) %>% 
+  mutate(consec = row_number()) %>% 
+  filter(MeanPopErr < 0.03) %>% 
+  slice(1)
+
+
+ggplot(df, aes(Epoch, TestAcc, color = Distribution, fill = Distribution)) + 
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  geom_text_repel(data = anno, aes(label = TestAcc), vjust = 1.8, hjust = 0.7) +
+  geom_text_repel(data = test, aes(label = Epoch), vjust = 4) +
+  geom_ribbon(aes(ymin= lower, ymax = upper), alpha = 0.25, color = NA)+
+  labs(y = "Accuracy", title = "Accuracy over 10000 epochs") +
+  facet_wrap(~Range) 
+  
+
+
+```
+
+
+```{r}
+df <- read.csv("relu_uniform_performance10.csv")
+
+df %>% 
+  group_by(Range) %>% 
+  summarize(n = n())
+```
