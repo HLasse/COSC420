@@ -540,6 +540,11 @@ for i in range(len(eta_range)):
         model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, filename, eta_range[i], n)
         print("Eta {} finished iteration {}".format(eta_range[i], n))
 
+"""
+
+DONE
+
+"""
 
 # -------------------------------------------------------------------
 
@@ -558,10 +563,16 @@ w_range = np.array([0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1,
 # Running the models with gaussian weight distribution
 # 10 iterations with gaussian initial weights
 for i in range(len(w_range)):
-    for n in range(10, 20):
+    for n in range(20, 30):
         model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
                          filename, given_eta = 0.005, count = n, w_distribution = 'gaussian', w_range = w_range[i])
-        print("Finished iteration {}".format(n))
+        print("Finished iteration {} weight {}".format(n, w_range[i]))
+
+"""
+
+DONE
+
+"""
 
 
 # Running the model with uniform weight distribution, testing different ranges
@@ -579,7 +590,7 @@ for i in range(len(w_range)):
     for n in range(10, 20):
         model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
                          filename, given_eta = 0.005, count = n, w_distribution = 'uniform', w_range = w_range[i])
-        print("Finished iteration {}".format(n))
+        print("Finished iteration {} weight {}".format(n, w_range[i]))
         
         
 # ------------------------------------------------------------
