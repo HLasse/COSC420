@@ -587,64 +587,45 @@ filename = "uniform_performance.csv"
 # Running the models with gaussian weight distribution
 # 10 iterations with gaussian initial weights
 for i in range(len(w_range)):
-    for n in range(10, 20):
+    for n in range(20, 30):
         model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
                          filename, given_eta = 0.005, count = n, w_distribution = 'uniform', w_range = w_range[i])
         print("Finished iteration {} weight {}".format(n, w_range[i]))
         
-        
+ 
+"""
+
+DONE
+
+"""
+       
 # ------------------------------------------------------------
 
+# First testing constant eta values from 0.05 to 0.95 with .10 intervals
+eta_range = np.array([0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.15])
 
+
+# Creating file to store performance measures
 header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Distribution,Range,Count\n"
-filename = "relu_uniform_performance.csv"
-
+filename = "relu_eta_performance.csv"
 
 #with open(filename, 'w+') as f:
 #        f.write(header)
 
-# Running the models with uniform weight distribution and ReLU activation
-# 10 iterations with uniform initial weights
-for i in range(len(w_range)):
-    for n in range(10, 20):
+# Running the models
+for i in range(len(eta_range)):
+    # 10 iterations with each eta value
+    for n in range(20, 30):
         model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
-                         filename, given_eta = 0.005, count = n, 
-                         w_distribution = 'uniform', w_range = w_range[i], activation_func = 'relu')
-        print("Finished iteration {}".format(n))
-
-
-
-
-header = "Epoch,TrainAcc,TestAcc,PopErr,Eta,Distribution,Range,Count\n"
-filename = "relu_gaussian_performance.csv"
-
-#yugygyugyg
-
-#with open(filename, 'w+') as f:
-#        f.write(header)
-
-
-
-
-# Running the models with uniform weight distribution and ReLU activation
-# 10 iterations with gaussian initial weights
-for i in range(len(w_range)):
-    for n in range(10, 20):
-        model = train_nn(train_data, train_target, 'paramiris.txt', 10000, test_data, test_target, 
-                         filename, given_eta = 0.005, count = n, 
-                         w_distribution = 'gaussian', w_range = w_range[i], activation_func = 'relu')
-        print("Finished iteration {} w {}".format(n, i))
-
-
-
-
+                         filename, eta_range[i], count = n,
+                         w_distribution = 'uniform', activation_func = 'relu')
+        print("Eta {} finished iteration {}".format(eta_range[i], n))
 
 
 """
-WHAT TO TEST?
 
-    - DIFFERENT VALUES OF LEARNING RATE; INFLUENCE ON FINAL ERROR AND TIME OF LEARNING - CHECK
-    - DIFFERENT VALUES FOR INITIALIZING WEIGHTS (UNIFORM, GAUSSIAN..) - CHECK    
-    - DIFFERENT ACTIVATION FUNCTIONS? 
- """
+DONE
+
+"""
+
 
