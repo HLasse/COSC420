@@ -2,14 +2,28 @@
 title: "MLP"
 author: "Lasse Hansen"
 date: "April 4, 2019"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
 ---
+
+```{r echo = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
 
 ```{r}
 setwd("~/Desktop/Neural Networks/Assignment")
 
-p_load(tidyverse, ggrepel)
+p_load(tidyverse, ggrepel, knitr, broom, stringr, kableExtra)
+```
 
+
+##Exp 1: Performance with different eta values (sigmoid activation)
+
+###Convergence
+```{r out.width = '100%'}
 df <- read.csv("eta_performance.csv")
 df2 <- read.csv("Data/eta_performance10.csv")
 
@@ -24,38 +38,96 @@ df$Count <- as.factor(df$Count)
 
 nIter <- length(unique(df$Count))
 
+# Adding columns with mean, sd, se and lower and upper bounds for se
 df <- df %>% 
   group_by(Eta, Epoch) %>% 
-  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), TestAccSE = (sd(TestAcc))/sqrt(nIter)) %>% 
-  mutate(lower = TestAccMean - TestAccSE, upper = TestAccMean + TestAccSE)
+  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), TestAccSE = (sd(TestAcc))/sqrt(nIter),
+         PopErrSD = sd(PopErr), PopErrMean = mean(PopErr), PopErrSE = (sd(PopErr))/sqrt(nIter)) %>% 
+  mutate(TestAcclower = TestAccMean - TestAccSE, TestAccupper = TestAccMean + TestAccSE,
+         TestAccSDlower = TestAccMean - TestAccSD, TestAccSDupper = TestAccMean + TestAccSD,
+         PopErrlower = PopErrMean - PopErrSE, PopErrupper = PopErrMean + PopErrSE,
+         PopErrSDlower = PopErrMean - PopErrSD, PopErrSDupper = PopErrMean + PopErrSD)
+
+# Creating df with information for annotating plots
+anno <- df %>% 
+  filter(Epoch == 10000) %>% 
+  group_by(Eta) %>% 
+  summarize(TestAcc = mean(TestAcc), PopErr = mean(PopErr))
+anno$Epoch <- 10000
+anno$TestAcc <- round(anno$TestAcc, 1)
+anno$PopErr <- round(anno$PopErr, 3)
+
+# Creating table for summarizing results
+results <- df %>% 
+  filter(Epoch == 10000) %>% 
+  group_by(Eta) %>% 
+  summarize(Test_accuracy = round(mean(TestAcc), 2), Test_accuracy_SD = round(mean(TestAccSD), 2), 
+            Test_accuracy_SE = round(mean(TestAccSE), 2), 
+            Population_error = mean(PopErr), Population_error_SD = mean(PopErrSD), Population_error_SE = mean(PopErrSE)) 
+
+# Finding mean convergence time
+conv <- df %>% 
+  filter(PopErr < 0.02) %>% 
+  group_by(Eta, Count) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  group_by(Eta) %>% 
+  summarize(Convergence_Time = round(mean(Epoch, 0)), SD = round(sd(Epoch), 0), n = n()) %>% 
+  mutate(lower = Convergence_Time - SD, upper = Convergence_Time + SD)
+  
+  
+# Merging tables
+final_results <- merge(results, conv, by = 'Eta', all = T)
+final_results %>% 
+  select(-c(lower, upper)) %>% 
+  kable(digits = 4, align = 'c', col.names = c('Eta', 'Mean', 'SD', 'SE', 'Mean', 'SD', 'SE', 'Mean time', 
+                'SD', 'n')) %>% 
+  column_spec(c(2,5, 8), border_left = T) %>% 
+  add_header_above(header = c(' ', 'Test Acc' = 3, 'Pop Err' = 3, 'Training Time' = 3)) %>% 
+  kable_styling(full_width = F)
+  
+
+# Convergence time plot
+ggplot(conv, aes(Eta, Convergence_Time, color = Eta)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.25) +
+  geom_label(aes(label = n), hjust = -0.5) +
+  theme(legend.position = 'none') +
+  labs(x = 'Learning Rate', y = 'Training Time (Epochs)', title = 'Mean training time')
+
+
+```
+
+###Accuracy and pop error
+```{r out.width='100%'}
 
 # Change across iterations  
-ggplot(df, aes(Epoch, TestAcc, color = Count)) + 
-  geom_line(alpha = 0.7) +
-  facet_wrap(~Eta) +
-  labs(y = "Test Accuracy", title = "Accuracy over 10000 epochs", color = 'Iteration')
+# ggplot(df, aes(Epoch, TestAcc, color = Count)) + 
+#   geom_line(alpha = 0.7) +
+#   facet_wrap(~Eta) +
+#   labs(y = "Test Accuracy", title = "Accuracy over 10000 epochs", color = 'Iteration')
   
-# Change across eta values (mean)
-ggplot(df, aes(Epoch, TestAcc, color = Eta)) + 
+# test acc Change across eta values (mean)
+ggplot(df, aes(Epoch, TestAcc, color = Eta, fill = Eta)) + 
   stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
-  geom_ribbon(aes(ymin= lower, ymax = upper), alpha = 0.2, color = NA) +
+  geom_ribbon(aes(ymin= TestAccSDlower, ymax = TestAccSDupper), alpha = 0.4, color = NA, fill = 'grey') +
+  geom_ribbon(aes(ymin= TestAcclower, ymax = TestAccupper), alpha = 0.3, color = NA) +
+  geom_text(data = anno, aes(label = TestAcc), vjust = 2, hjust = 1) +
   facet_wrap(~Eta) +
   theme(legend.position = 'none') +
-  labs(y = "Test Accuracy", title = "Accuracy over 10000 epochs")
+  labs(y = "Test Accuracy %", title = "Mean test accuracy over 30 iterations and 10000 epochs")
 
-
-ggplot(subset(df, df$Eta == '0.01'), aes(Epoch, TestAcc, color = Eta, fill = Eta)) + 
+# population error change across eta values
+ggplot(df, aes(Epoch, PopErr, color = Eta, fill = Eta)) + 
   stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
-  geom_ribbon(aes(ymin= lower, ymax = upper), alpha = 0.2, color = NA) 
-
-
-  
-
-ggplot(df, aes(Epoch, TrainAcc, color = Eta)) + 
-  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  geom_ribbon(aes(ymin= PopErrSDlower, ymax = PopErrSDupper), alpha = 0.4, color = NA, fill = 'grey') +
+  geom_ribbon(aes(ymin= PopErrlower, ymax = PopErrupper), alpha = 0.3, color = NA) +
+  geom_text(data = anno, aes(label = PopErr), vjust = -1.5, hjust = 1) +
   facet_wrap(~Eta) +
   theme(legend.position = 'none') +
-  labs(y = "Test Accuracy", title = "Accuracy over 10000 epochs")
+  labs(y = "Population Error", title = "Mean population error over 30 iterations and 10000 epochs")
+
+
 
 
 # Mean change, train and test
@@ -64,93 +136,332 @@ ggplot(df, aes(Epoch, TestAcc, color = Eta)) +
   stat_summary(aes(y = TrainAcc), fun.y = 'mean', geom = 'line', linetype = 'dashed', alpha = 0.7) +
   facet_wrap(~Eta) +
   theme(legend.position = 'none') +
-  labs(y = "Accuracy", title = "Accuracy over 10000 epochs")
-
-
-
-  
+  labs(y = "Accuracy %", title = "Accuracy over 10000 epochs")
 ```
 
 
-```{r}
+
+```{r eval = FALSE}
+# Just for fun
+
+df$Eta = as.factor(df$Eta)
+
+model = lm(PopErr ~ Eta, subset(df, Epoch == 10000))
+model2 = lm(TestAcc ~ Eta, subset(df, Epoch == 10000))
+
+
+nIter <- length(unique(df$Count))
+popErrM <- tidy(model)
+colnames(popErrM) <- c('Learning_Rate', 'Estimate', 'Std.Error', 'T-value', 'P-value') 
+popErrM$Learning_Rate[5:10] <-  gsub("[^0-9\\.]", "", popErrM$Learning_Rate[5:10])
+popErrM$Learning_Rate[2:4] <- str_sub(popErrM$Learning_Rate[2:4], start = 4)
+kable(popErrM, digits = 3, caption = 'Population Error') %>% 
+  kable_styling(full_width = F)
+
+tAccM <- tidy(model2)
+colnames(tAccM) <- c('Learning_Rate', 'Estimate', 'Std.Error', 'T-value', 'P-value') 
+tAccM$Learning_Rate[5:10] <-  gsub("[^0-9\\.]", "", tAccM$Learning_Rate[5:10])
+tAccM$Learning_Rate[2:4] <- str_sub(tAccM$Learning_Rate[2:4], start = 4)
+kable(tAccM, digits = 2, caption = 'Test Accuracy') %>%
+  kable_styling(full_width = F)
+```
+
+#Exp 2: Different weight initializations
+
+```{r out.width='100%'}
 uni <- read.csv("uniform_performance.csv")
 gauss <- read.csv("gaussian_performance.csv")
 
 df <- rbind(uni, gauss)
 df$Count <- as.factor(df$Count)
 
+df$Distribution <- ifelse(df$Distribution == 'uniform', 'Uniform', 'Gaussian')
+
+nIter <- length(unique(df$Count))
 
 df <- df %>% 
   group_by(Distribution, Range, Epoch) %>% 
-  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), 
-         TestAccSE = (sd(TestAcc))/sqrt(length(unique(Count))),
-         MeanPopErr = mean(PopErr)) %>% 
-  mutate(lower = TestAccMean - TestAccSE, upper = TestAccMean + TestAccSE)
+  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), TestAccSE = (sd(TestAcc))/sqrt(nIter),
+         PopErrSD = sd(PopErr), PopErrMean = mean(PopErr), PopErrSE = (sd(PopErr))/sqrt(nIter)) %>% 
+  mutate(TestAcclower = TestAccMean - TestAccSE, TestAccupper = TestAccMean + TestAccSE,
+         TestAccSDlower = TestAccMean - TestAccSD, TestAccSDupper = TestAccMean + TestAccSD,
+         PopErrlower = PopErrMean - PopErrSE, PopErrupper = PopErrMean + PopErrSE,
+         PopErrSDlower = PopErrMean - PopErrSD, PopErrSDupper = PopErrMean + PopErrSD)
 
 
-
-gauss <- gauss %>% 
-  group_by(Distribution, Epoch) %>% 
-  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), TestAccSE = (sd(TestAcc))/sqrt(length(unique(Count)))) %>% 
-  mutate(lower = TestAccMean - TestAccSE, upper = TestAccMean + TestAccSE)
-
-anno <- gauss %>% 
-  filter(Epoch == 10000) %>% 
-  summarize(TestAcc = mean(TestAcc))
-anno$Epoch <- 10000
-anno$Distribution <- 'gaussian'
-anno$TestAcc <- round(anno$TestAcc, 1)
-
-
-# Mean performance of gaussian
-ggplot(gauss, aes(Epoch, TestAcc, color = Distribution)) +
-  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
-  geom_text(data = anno, aes(label = TestAcc), vjust = 2.3) +
-  geom_ribbon(aes(ymin= lower, ymax = upper), alpha = 0.2, color = NA)+
-  theme(legend.position = 'none')
 
 
 # Mean uniform performance across different initial weights
 anno <- df %>% 
   filter(Epoch == 10000) %>% 
   group_by(Distribution, Range) %>% 
-  summarize(TestAcc = mean(TestAcc))
+  summarize(TestAcc = mean(TestAcc), PopErr = round(mean(PopErr), 4))
 anno$Epoch <- 10000
 anno$TestAcc <- round(anno$TestAcc, 1)
 
-error_threshold <- function(df) {
-  df[which(df$MeanPopErr < 0.02),'Epoch'][1,]
-}
 
-error_threshold(df)
+# Finding the first time mean population error below a threshold
+# df %>% 
+#   group_by(Distribution, Range) %>% 
+#   filter(PopErrMean < 0.025) %>% 
+#   slice(1) %>% 
+#   select(Distribution, Range, Epoch, PopErrMean) %>% 
+#   kable() %>% 
+#   kable_styling(full_width = F)
+# 
+# 
+# 
+# # Finding mean convergence time
+# df %>% 
+#   filter(PopErr < 0.02) %>% 
+#   group_by(Distribution, Range, Count) %>% 
+#   slice(1) %>% 
+#   ungroup() %>% 
+#   group_by(Distribution, Range) %>% 
+#   summarize(Convergence_Time = round(mean(Epoch, 0)), n = n()) %>% 
+#   arrange(Range) %>% 
+#   kable(align = 'c') %>% 
+#   kable_styling(full_width = F, bootstrap_options = c('striped', 'condensed'))
+#   
+#   
+#   
+# 
+# 
+# # Finding lowest pop err
+# df %>% 
+#   group_by(Distribution, Range) %>% 
+#   summarize(Best = min(PopErr)) %>% 
+#   kable() %>% 
+#   kable_styling(full_width = F)
 
+```
 
-# Finding the first time mean population error below the threshold
-test <- df %>% 
-  group_by(Distribution, Range) %>% 
-  arrange(Range, Epoch) %>% 
-  mutate(consec = row_number()) %>% 
-  filter(MeanPopErr < 0.03) %>% 
-  slice(1)
+```{r out.width = '100%'}
 
-
+# Test Acc 
 ggplot(df, aes(Epoch, TestAcc, color = Distribution, fill = Distribution)) + 
   stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
-  geom_text_repel(data = anno, aes(label = TestAcc), vjust = 1.8, hjust = 0.7) +
-  geom_text_repel(data = test, aes(label = Epoch), vjust = 4) +
-  geom_ribbon(aes(ymin= lower, ymax = upper), alpha = 0.25, color = NA)+
-  labs(y = "Accuracy", title = "Accuracy over 10000 epochs") +
-  facet_wrap(~Range) 
+  geom_text_repel(data = anno, aes(label = TestAcc), vjust = 4, hjust = 0.7, segment.alpha = 0.3) +
+ # geom_text_repel(data = test, aes(label = Epoch), vjust = 4) +
+  geom_ribbon(aes(ymin= TestAccSDlower, ymax = TestAccSDupper), alpha = 0.3, color = NA) +
+  geom_ribbon(aes(ymin= TestAcclower, ymax = TestAccupper), alpha = 0.5, color = NA) +
+  labs(y = "Test Accuracy %", title = "Mean test accuracy over 30 iterations and 10000 epochs") +
+  facet_wrap(~Range) +
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100))
   
+# Pop Err
+ggplot(df, aes(Epoch, PopErr, color = Distribution, fill = Distribution)) + 
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  geom_text_repel(data = anno, aes(label = PopErr), vjust = -3, hjust = 0.7, size = 3.5, segment.alpha = 0.3) +
+ # geom_text_repel(data = test, aes(label = Epoch), vjust = 4) +
+  geom_ribbon(aes(ymin= PopErrSDlower, ymax = PopErrSDupper), alpha = 0.3, color = NA) +
+  geom_ribbon(aes(ymin= PopErrlower, ymax = PopErrupper), alpha = 0.5, color = NA) +
+  labs(y = "Population Error", title = "Mean population error over 30 iterations and 10000 epochs") +
+  facet_wrap(~Range) +
+  ylim(-0.05,0.4)
+
+
+# table of results
+# df %>% 
+#   filter(Epoch == 10000) %>% 
+#   group_by(Distribution) %>% 
+#   summarize(maxTest = max(TestAccMean), minPop = min(PopErrMean))
 
 
 ```
 
+```{r out.width='70%'}
+accVals <- c(96.49, 90.23)
+popVals <- c(0.0244, 0.0237)
+
+
+results <- df %>% 
+  filter(Epoch == 10000) %>% 
+  group_by(Distribution, Range) %>% 
+  summarize(Test_accuracy = round(mean(TestAcc), 2), Test_accuracy_SD = round(mean(TestAccSD), 2), 
+            Test_accuracy_SE = round(mean(TestAccSE), 2), 
+            Population_error = round(mean(PopErr),4), Population_error_SD = mean(PopErrSD), Population_error_SE = mean(PopErrSE)) %>% 
+  mutate(Test_accuracy = cell_spec(Test_accuracy, "html", bold = ifelse(Test_accuracy %in% accVals, T, F))) %>% 
+  mutate(Population_error = cell_spec(Population_error, "html", bold = ifelse(Population_error %in% popVals, T, F)))
+
+# Finding mean convergence time
+conv <- df %>% 
+  filter(PopErr < 0.02) %>% 
+  group_by(Distribution, Range, Count) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  group_by(Distribution, Range) %>% 
+  summarize(Convergence_Time = round(mean(Epoch, 0)), SD = round(sd(Epoch), 0), n = n()) %>% 
+  mutate(lower = Convergence_Time - SD, upper = Convergence_Time + SD)
+  
+conv$Range <- as.factor(conv$Range)
+
+# plot
+ggplot(conv, aes(Range, Convergence_Time, color = Distribution)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.25, alpha = 0.8) +
+ # geom_label_repel(aes(label = n), hjust = -0.5, segment.alpha = 0.3) + # too crowded
+  labs(x = 'Weight Range', y = 'Training Time (Epochs)', title = 'Mean training time')
+
+# n Convergence plot
+ggplot(conv, aes(Range, n, color = Distribution, group = Distribution)) +
+  geom_point() +
+  geom_line() + 
+  scale_y_continuous(breaks = c(0,5,10,15,20,25,30)) +
+  labs(x = 'Weight Range', y = 'Networks succesfully trained', title = 'Number of networks that succesfully trained')
+
+
+
+```
+
+```{r out.width='50%', fig.show='hold'}
+library(scales)
+#show_col(hue_pal()(2))
+
+# Convergence plot
+ggplot(subset(conv, Distribution == 'Uniform'), aes(Range, Convergence_Time)) +
+  geom_point(color = '#F8766D') +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.25, alpha = 0.8, color = '#F8766D') +
+ # geom_label_repel(aes(label = n), hjust = -0.5, segment.alpha = 0.3) + # too crowded
+  labs(x = 'Weight Range', y = 'Training Time (Epochs)', title = 'Mean training time')
+
+
+ggplot(subset(conv, Distribution == 'Gaussian'), aes(Range, Convergence_Time)) +
+  geom_point(color = '#00BFC4') +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.25, alpha = 0.8, color = '#00BFC4') +
+ # geom_label_repel(aes(label = n), hjust = -0.5, segment.alpha = 0.3) + # too crowded
+  labs(x = 'Weight Range', y = 'Training Time (Epochs)', title = 'Mean training time')
+
+```
 
 ```{r}
-df <- read.csv("relu_uniform_performance10.csv")
 
-df %>% 
-  group_by(Range) %>% 
-  summarize(n = n())
+# Finding best convergence values to make bold 
+maxConv <- conv %>% 
+  group_by(Distribution) %>% 
+  summarize(time = min(Convergence_Time), n = max(n))
+
+conv <- conv %>% 
+  mutate(Convergence_Time = cell_spec(Convergence_Time, "html", bold = ifelse(Convergence_Time %in% maxConv$time, T, F))) %>% 
+  mutate(n = cell_spec(n, "html", bold = ifelse(n == 30 | n == 28 & Distribution == 'Gaussian', T, F)))
+  
+
+# Merging tables
+final_results <- merge(results, conv, by = c('Distribution', 'Range'), all = T)
+final_results %>% 
+  select(-c(lower, upper)) %>% 
+  #arrange(Range) %>%
+  kable(digits = 4, align = 'c', col.names = c('Distribution', 'Range', 'Mean', 'SD', 'SE', 'Mean', 'SD', 'SE', 'Mean time', 
+                'SD', 'n'), escape = F) %>% 
+  column_spec(c(3, 6, 9), border_left = T) %>% 
+  row_spec(16, extra_css = "border-bottom: 1px solid") %>% 
+  add_header_above(header = c(' ' = 2, 'Test Acc' = 3, 'Pop Err' = 3, 'Training Time' = 3)) %>% 
+  kable_styling(bootstrap_options = c('striped', 'condensed'))
+
+
+
+```
+
+##Exp 3: ReLu eta 
+
+###Convergence
+```{r out.width = '100%'}
+df <- read.csv("relu_eta_performance.csv")
+
+
+df$Eta <- as.factor(df$Eta)
+df$Count <- df$Count + 1
+df$Count <- as.factor(df$Count)
+
+nIter <- length(unique(df$Count))
+
+# Adding columns with mean, sd, se and lower and upper bounds for se
+df <- df %>% 
+  group_by(Eta, Epoch) %>% 
+  mutate(TestAccSD = sd(TestAcc), TestAccMean = mean(TestAcc), TestAccSE = (sd(TestAcc))/sqrt(nIter),
+         PopErrSD = sd(PopErr), PopErrMean = mean(PopErr), PopErrSE = (sd(PopErr))/sqrt(nIter)) %>% 
+  mutate(TestAcclower = TestAccMean - TestAccSE, TestAccupper = TestAccMean + TestAccSE,
+         TestAccSDlower = TestAccMean - TestAccSD, TestAccSDupper = TestAccMean + TestAccSD,
+         PopErrlower = PopErrMean - PopErrSE, PopErrupper = PopErrMean + PopErrSE,
+         PopErrSDlower = PopErrMean - PopErrSD, PopErrSDupper = PopErrMean + PopErrSD)
+
+# Creating df with information for annotating plots
+anno <- df %>% 
+  filter(Epoch == 10000) %>% 
+  group_by(Eta) %>% 
+  summarize(TestAcc = mean(TestAcc), PopErr = mean(PopErr))
+anno$Epoch <- 10000
+anno$TestAcc <- round(anno$TestAcc, 1)
+anno$PopErr <- round(anno$PopErr, 3)
+
+# Creating table for summarizing results
+results <- df %>% 
+  filter(Epoch == 10000) %>% 
+  group_by(Eta) %>% 
+  summarize(Test_accuracy = round(mean(TestAcc), 2), Test_accuracy_SD = round(mean(TestAccSD), 2), 
+            Test_accuracy_SE = round(mean(TestAccSE), 2), 
+            Population_error = mean(PopErr), Population_error_SD = mean(PopErrSD), Population_error_SE = mean(PopErrSE)) 
+
+# Finding mean convergence time
+conv <- df %>% 
+  filter(PopErr < 0.02) %>% 
+  group_by(Eta, Count) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  group_by(Eta) %>% 
+  summarize(Convergence_Time = round(mean(Epoch, 0)), SD = round(sd(Epoch), 0), n = n()) %>% 
+  mutate(lower = Convergence_Time - SD, upper = Convergence_Time + SD)
+  
+  
+# Merging tables
+final_results <- merge(results, conv, by = 'Eta', all = T)
+final_results %>% 
+  select(-c(lower, upper)) %>% 
+  kable(digits = 4, align = 'c', col.names = c('Eta', 'Mean', 'SD', 'SE', 'Mean', 'SD', 'SE', 'Mean time', 
+                'SD', 'n')) %>% 
+  column_spec(c(2,5, 8), border_left = T) %>% 
+  add_header_above(header = c(' ', 'Test Acc' = 3, 'Pop Err' = 3, 'Training Time' = 3)) %>% 
+  kable_styling(full_width = F)
+  
+
+# Convergence time plot
+ggplot(conv, aes(Eta, Convergence_Time, color = Eta)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.25) +
+  geom_label(aes(label = n), hjust = -0.5) +
+  scale_y_continuous(limits = c(-1300, 10000)) +
+  theme(legend.position = 'none') +
+  labs(x = 'Learning Rate', y = 'Training Time (Epochs)', title = 'Mean training time') 
+
+```
+
+###Accuracy and pop error
+```{r out.width='100%'}
+
+# Change across iterations  
+# ggplot(df, aes(Epoch, TestAcc, color = Count)) + 
+#   geom_line(alpha = 0.7) +
+#   facet_wrap(~Eta) +
+#   labs(y = "Test Accuracy", title = "Accuracy over 10000 epochs", color = 'Iteration')
+  
+# test acc Change across eta values (mean)
+ggplot(df, aes(Epoch, TestAcc, color = Eta, fill = Eta)) + 
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  geom_ribbon(aes(ymin= TestAccSDlower, ymax = TestAccSDupper), alpha = 0.4, color = NA, fill = 'grey') +
+  geom_ribbon(aes(ymin= TestAcclower, ymax = TestAccupper), alpha = 0.3, color = NA) +
+  geom_text(data = anno, aes(label = TestAcc), vjust = 2, hjust = 1) +
+  facet_wrap(~Eta) +
+  theme(legend.position = 'none') +
+  labs(y = "Test Accuracy %", title = "Mean test accuracy over 30 iterations and 10000 epochs")
+
+# population error change across eta values
+ggplot(df, aes(Epoch, PopErr, color = Eta, fill = Eta)) + 
+  stat_summary(fun.y = 'mean', geom = 'line', alpha = 0.7) +
+  geom_ribbon(aes(ymin= PopErrSDlower, ymax = PopErrSDupper), alpha = 0.4, color = NA, fill = 'grey') +
+  geom_ribbon(aes(ymin= PopErrlower, ymax = PopErrupper), alpha = 0.3, color = NA) +
+  geom_text(data = anno, aes(label = PopErr), vjust = -1.5, hjust = 1) +
+  facet_wrap(~Eta) +
+  theme(legend.position = 'none') +
+  labs(y = "Population Error", title = "Mean population error over 30 iterations and 10000 epochs")
+
 ```
