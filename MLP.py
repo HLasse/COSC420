@@ -352,7 +352,7 @@ def train_nn(data, target, params, max_epochs, validation_data = None, validatio
     # Making an array of the hidden layer; repeating for as many units specified + a bias unit
     hidden = []
     for n in range(n_hidden):
-        hidden.append(neuron('hidden'))
+        hidden.append(neuron('hidden', activation_func))
     hidden.append(neuron('bias'))
     hidden = np.array(hidden)
     
