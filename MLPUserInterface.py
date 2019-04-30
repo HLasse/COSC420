@@ -178,12 +178,13 @@ def test_performance(network, test_input, target = "not specified", verbose = Fa
         hidden_activations.append(network.hidden[u].activation)
         
     # Printing activations for the units in the hidden layer (not printing activation for bias, since it's just 1)    
-    if verbose == True:    
+    if verbose == True: 
+        print("")
         for u in range(network.hidden.size - 1):
             print("Weights coming in to hidden unit {} are {}".format(u, network.hidden[u].weights))        
             print("Activation for hidden unit {} is {}".format(u, network.hidden[u].activation))
          
-        print("\n")
+        print("")
     hidden_activations = np.array(hidden_activations)
              
     
@@ -438,7 +439,7 @@ def train_nn(data, target, params, max_epochs, validation_data = None, validatio
     else:   
         inputs = prev_init.input
         hidden = prev_init.hidden
-        outputs = prev_init.outputs
+        outputs = prev_init.output
     
     
     # Initializing population error with an arbitrarily high value
@@ -543,112 +544,106 @@ def train_nn(data, target, params, max_epochs, validation_data = None, validatio
     
 # User interface
 print("Hello Anthony, and welcome to my neural network builder!\nTo begin, choose an activation function for hidden units.")
-while True:
+def UI():
+
+    while True:
+        
+        # Getting activation function to draw weights from   
+       while True:    
+            act_func = input("Type 'sigmoid' for sigmoid or 'relu' for ReLU\n")    
+            if act_func not in ['sigmoid', 'relu']:
+                print("Invalid input. Try again.")
+            else:
+                break
     
-    # Getting activation function to draw weights from   
-   while True:    
-        act_func = input("Type 'sigmoid' for sigmoid or 'relu' for ReLU\n")    
-        if act_func not in ['sigmoid', 'relu']:
-            print("Invalid input. Try again.")
-        else:
-            break
-
-   print("Alright, let's initialize the weights.\n")
-   
-   while True:
-        print("If you want to draw weights from a uniform distribution press 1")
-        print("If you want to draw weights from a Gaussian distribution press 2")
-        dist = input()
-
-        if dist not in ["1","2"]:
-            print("Invalid input, try again")
-        else:
-            if dist == '1':
-                w_distribution = 'uniform'
-            if dist == '2':
-                w_distribution = 'gaussian'
-                
-            print("Sweet, {} distribution it is.".format(w_distribution))
-            break
-
-    # Getting range to draw weights from
-   if w_distribution == 'uniform':
+       print("\nAlright, let's initialize the weights.\n")
+       
        while True:
+            print("If you want to draw weights from a uniform distribution press 1")
+            print("If you want to draw weights from a Gaussian distribution press 2")
+            dist = input()
+    
+            if dist not in ["1","2"]:
+                print("Invalid input, try again")
+            else:
+                if dist == '1':
+                    w_distribution = 'uniform'
+                if dist == '2':
+                    w_distribution = 'gaussian'
+                    
+                print("\nSweet, {} distribution it is.\n".format(w_distribution))
+                break
+    
+        # Getting range to draw weights from
+       if w_distribution == 'uniform':
+           while True:
+               try:
+                   w_range = float(input("From which range around zero should the weights be drawn?\n"))
+                   break
+               except ValueError:
+                   print("Not numeric. Try again.")
+     
+       if w_distribution == 'gaussian':
+           while True:
+               try:
+                   w_range = float(input("Mean is 0, what should the standard deviation be?\n"))
+                   break
+               except ValueError:
+                   print("Not numeric. Try again.") 
+                    
+     
+        
+        
+       print("\nAll set! Initialzing weights.\n \n")
+        
+       init_network = init_weights('param.txt', w_distribution, w_range, act_func)
+        
+       while True:
+           proceed = input("\nIf you are happy with these weights, press 1.\nIf you want to redraw weights, press 2.\n")
+           if proceed not in ["1", "2"]:
+               print("Invalid input, try again")
+            
+           if proceed == '1':
+               break
+           if proceed == '2':
+               init_network = init_weights('param.txt', w_distribution, w_range, act_func)
+    
+    
+       # n epochs
+       while True:
+           print("\nThe network will train until it reaches the population error specified in param.txt.")
            try:
-               w_range = float(input("From which range around zero should the weights be drawn?\n"))
+               max_epochs = int(input("If it does not reach it, after how many epochs should the program terminate?\n")) 
                break
            except ValueError:
-               print("Not numeric. Try again.")
- 
-   if w_distribution == 'gaussian':
-       while True:
-           try:
-               w_range = float(input("Mean is 0, what should the standard deviation be?\n"))
-               break
-           except ValueError:
-               print("Not numeric. Try again.") 
-                
- 
-    
-    
-   print("All set! Initialzing weights.\n \n")
-    
-   init_network = init_weights('param.txt', w_distribution, w_range, act_func)
-    
-   while True:
-       proceed = input("""If you are happy with these weights, press 1.\n
-       If you want to redraw weights, press 2.\n""")
-       if proceed not in ["1", "2"]:
-           print("Invalid input, try again")
-        
-       if proceed == '1':
-           break
-       if proceed == '2':
-           init_network = init_weights('param.txt', w_distribution, w_range, act_func)
+               print("Not an integer. Try again.")
+            
+       print("Ready to go! The network will now begin training")
+       
+       
+       net = train_nn(data = 'in.txt', target = 'teach.txt', params =  'param.txt', max_epochs = max_epochs, 
+                      w_distribution = w_distribution, w_range = w_range, activation_func = act_func, prev_init = init_network)
+                      
 
-
-   # n epochs
-   while True:
-       try:
-           max_epochs = int(input("""The network will train until it reaches the population error specified in param.txt. 
-           If it does not reach it, after how many epochs should the program terminate?\n""")) 
-           break
-       except ValueError:
-           print("Not an integer. Try again.")
-        
-   print("Ready to go! The network will now begin training")
-   
-   
-   net = train_nn(data = 'in.txt', target = 'target.txt', params =  'param.txt', max_epochs = max_epochs, 
-                  w_distribution = w_distribution, w_range = w_range, activation_func = act_func)
-                  
-   print("\nAll done!\nPress 1 if you want to exit\nPress 2 if you want to test performance")
-
-   while True:
-       try:   
-           what_now = int(input())
-           if what_now in [1, 2]:
-               break
-       except ValueError:
-           print("Invalid input. Try again.")
-   
-   if what_now == 1:
-       break
-   
-   # Testing performance
-   if what_now == 2:
+       
+       # Testing performance
+       
        data = read_input('in.txt')
        target = read_teacher('target.txt')
        train_acc = test_multi(net, data, target)
        
-       print("The network's accuracy across the whole dataset is {}%".format(train_acc))
-       print("To test how well the network fares on a specific row in your data, type the row number you want to test\n")
+       print("\nThe network's accuracy across the whole dataset is {}%".format(train_acc))
+       print("\nTo test how well the network fares on a specific row in your data, type the row number you want to test")
+       print("To restart the program and try other options type 'new'")
        print("Else, type 'q' to quit")
 
        while True:
            row_n = input()
            
            if row_n == 'q':
+               break
+           
+           if row_n == 'new':
                break
            
            else:
@@ -659,15 +654,25 @@ while True:
                
                while True:
                    perf = test_performance(net, data[row_n], target[row_n], verbose = True)
-                   print("\n \nPress 'q' to quit, otherwise type another row number to test")
+                   print("\n \nPress 'q' to quit, 'new' to restart, or type another row number to test")
                    
-                   test_more = input()
-                   if test_more == 'q':
+                   row_n = input()
+                   if row_n == 'q':
                        break
+                   
+                   if row_n == 'new':
+                       break
+                   
                    else:
-                       row_n = int(test_more)
+                       row_n = int(row_n)
            break
        
- 
-   break
+       if row_n == 'q':
+           break
+       
+       else: 
+           UI()
     
+       break      
+
+UI()
