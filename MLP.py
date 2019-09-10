@@ -4,7 +4,7 @@ Created on Mon Mar 25 01:17:56 2019
 
 @author: lasse
 """
-
+#
 # Multilayer perceptron with 1 hidden layer. 
 import numpy as np
 import math
